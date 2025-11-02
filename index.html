@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Cat Queen Staking DApp</title>
+  <script type="module" src="https://cdn.jsdelivr.net/npm/ethers@5.7.2/dist/ethers.esm.min.js"></script>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background-color: #0d0d0d;
+      color: white;
+      text-align: center;
+      padding: 20px;
+    }
+    h1 {
+      color: #f4b41a;
+    }
+    button {
+      background-color: #f4b41a;
+      border: none;
+      color: black;
+      padding: 10px 20px;
+      margin: 10px;
+      border-radius: 8px;
+      font-weight: bold;
+      cursor: pointer;
+    }
+    button:hover {
+      background-color: #ffca3a;
+    }
+    input {
+      padding: 10px;
+      margin: 10px;
+      border-radius: 8px;
+      border: 1px solid #333;
+      width: 200px;
+    }
+    #status {
+      margin-top: 20px;
+      font-size: 16px;
+      color: #00ff88;
+    }
+  </style>
+</head>
+<body>
+  <h1>🐱 Cat Queen Staking</h1>
+  <p id="wallet">Wallet: Not connected</p>
+  <button id="connectBtn">Connect Wallet</button>
+
+  <div style="margin-top:30px;">
+    <h3>Stake Tokens</h3>
+    <input type="text" id="stakeAmount" placeholder="Jumlah token" />
+    <button id="stakeBtn">Stake</button>
+  </div>
+
+  <div style="margin-top:20px;">
+    <h3>Unstake Tokens</h3>
+    <input type="text" id="unstakeAmount" placeholder="Jumlah token" />
+    <button id="unstakeBtn">Unstake</button>
+  </div>
+
+  <div style="margin-top:20px;">
+    <h3>Claim Rewards</h3>
+    <button id="claimBtn">Claim Rewards</button>
+  </div>
+
+  <div id="status"></div>
+
+  <script type="module">
+    import { ethers } from "https://cdn.jsdelivr.net/npm/ethers@5.7.2/dist/ethers.esm.min.js";
+
+    const tokenAddress = "0x586f3cb4a16c8dbf6a62b599a73eca9cd0b945fe";
+    const stakingAddress = "0x3f1888c74516B97d33FA3b71cE8d05E920bb0aA7";
+    const chainId = 8453; // Base chain
+
+    const tokenABI = [
+      "function approve(address spender, uint256 amount) public returns (bool)",
+      "function allowance(address owner, address spender) public view returns (uint256)",
+      "function balanceOf(address owner) public view returns (uint256)",
+      "function decimals() public view returns (uint8)"
+    ];
+
+    const stakingABI = [
+      "function stake(uint256 _amount) public",
+      "function withdraw(uint256 _amount) public",
+      "function claimRewards() public"
+    ];
+
+    let provider, signer, walletAddress;
+
+    const connectBtn = document.getElementById("connectBtn");
+    const walletText = document.getElementById("wallet");
+    const statusDiv = document.getElementById("status");
+
+    async function connectWallet() {
+      try {
+        if (!window.ethereum) {
+          alert("Wallet tidak terdeteksi. Silakan buka di browser Metamask.");
+          return;
+        }
+
+        provider = new ethers.providers.Web3Provider(window.ethereum, "any");
+        await provider.send("eth_requestAccounts", []);
+        signer = provider.getSigner();
+        walletAddress = await signer.getAddress();
+
+        walletText.textContent = "Wallet: " + walletAddress.slice(0, 6) + "..." + walletAddress.slice(-4);
+        statusDiv.textContent = "✅ Wallet berhasil terhubung!";
+        console.log("Wallet connected:", walletAddress);
+      } catch (err) {
+        console.error(err);
+        alert("Gagal connect wallet!");
+      }
+    }
+
+    async function stakeTokens() {
+      try {
+        const amount = document.getElementById("stakeAmount").value;
+        if (!amount) return alert("Masukkan jumlah token!");
+        const token = new ethers.Contract(tokenAddress, tokenABI, signer);
+        const staking = new ethers.Contract(stakingAddress, stakingABI, signer);
+        const decimals = await token.decimals();
+        const amountToStake = ethers.utils.parseUnits(amount, decimals);
+
+        statusDiv.textContent = "⏳ Approving token...";
+        const tx1 = await token.approve(stakingAddress, amountToStake);
+        await tx1.wait();
+
+        statusDiv.textContent = "⏳ Staking token...";
+        const tx2 = await staking.stake(amountToStake);
+        await tx2.wait();
+
+        statusDiv.textContent = "✅ Staking berhasil!";
+      } catch (err) {
+        console.error(err);
+        statusDiv.textContent = "❌ Gagal staking.";
+      }
+    }
+
+    async function unstakeTokens() {
+      try {
+        const amount = document.getElementById("unstakeAmount").value;
+        if (!amount) return alert("Masukkan jumlah token!");
+        const staking = new ethers.Contract(stakingAddress, stakingABI, signer);
+        const token = new ethers.Contract(tokenAddress, tokenABI, signer);
+        const decimals = await token.decimals();
+        const amountToUnstake = ethers.utils.parseUnits(amount, decimals);
+
+        statusDiv.textContent = "⏳ Unstaking token...";
+        const tx = await staking.withdraw(amountToUnstake);
+        await tx.wait();
+
+        statusDiv.textContent = "✅ Unstake berhasil!";
+      } catch (err) {
+        console.error(err);
+        statusDiv.textContent = "❌ Gagal unstake.";
+      }
+    }
+
+    async function claimRewards() {
+      try {
+        const staking = new ethers.Contract(stakingAddress, stakingABI, signer);
+        statusDiv.textContent = "⏳ Mengklaim reward...";
+        const tx = await staking.claimRewards();
+        await tx.wait();
+        statusDiv.textContent = "✅ Reward berhasil diklaim!";
+      } catch (err) {
+        console.error(err);
+        statusDiv.textContent = "❌ Gagal klaim reward.";
+      }
+    }
+
+    connectBtn.addEventListener("click", connectWallet);
+    document.getElementById("stakeBtn").addEventListener("click", stakeTokens);
+    document.getElementById("unstakeBtn").addEventListener("click", unstakeTokens);
+    document.getElementById("claimBtn").addEventListener("click", claimRewards);
+  </script>
+</body>
+</html>
